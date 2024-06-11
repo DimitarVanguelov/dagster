@@ -16,7 +16,6 @@ from dagster._core.definitions.declarative_automation.serialized_objects import 
 )
 from dagster._core.definitions.partition import AllPartitionsSubset
 from dagster._core.definitions.time_window_partitions import BaseTimeWindowPartitionsSubset
-from dagster._model import DagsterModel
 from dagster._time import get_current_timestamp
 from dagster._utils.security import non_secure_md5_hash_str
 
@@ -46,7 +45,7 @@ if TYPE_CHECKING:
 
 
 @experimental
-class AutomationCondition(ABC, DagsterModel):
+class AutomationCondition(ABC):
     @property
     def requires_cursor(self) -> bool:
         return False
