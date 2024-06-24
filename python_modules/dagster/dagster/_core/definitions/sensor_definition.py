@@ -870,17 +870,58 @@ class SensorDefinition(IHasInternalInit):
                     check.failed("Expected a single SkipReason: received multiple SkipReasons")
 
         _check_dynamic_partitions_requests(dynamic_partitions_requests)
+        # TODO - can probably have a more intelligent way of determining if a run request should go to the backfill daemon
+        # maybe if there is just one partitions key in the asset graph subset?
+        # can also make a helper function since we do the same split in the daemon
+        run_requests_for_backfill_daemon = []
+        run_requests_for_single_runs = []
+        for run_request in run_requests:
+            if run_request.asset_graph_subset is not None:
+                run_requests_for_backfill_daemon.append(run_request)
+            else:
+                run_requests_for_single_runs.append(run_request)
+        # TOOD fix this checking. Determine if we want to only allow one backfill or if we can do mulitple backfills or backfills and single
+        # runs together. This will depend on run grouping stuff
+        if len(run_requests_for_backfill_daemon) > 1:
+            raise DagsterInvalidDefinitionError(
+                "Cannot yield multiple RunRequests with asset_graph_subset for a single sensor tick"
+            )
+        if run_requests_for_single_runs and run_requests_for_backfill_daemon:
+            raise DagsterInvalidDefinitionError(
+                "Cannot yield RunRequests with asset_graph_subset and RunRequests with asset_selection for a single sensor tick"
+            )
+
+        if run_requests_for_backfill_daemon:
+            run_request = run_requests_for_backfill_daemon[0]
+            asset_selection = check.not_none(
+                self._asset_selection,
+                "Can only yield RunRequests with asset_graph_subset for sensors with an asset_selection",
+            )
+            asset_keys = run_request.asset_graph_subset.asset_keys
+
+            unexpected_asset_keys = (AssetSelection.keys(*asset_keys) - asset_selection).resolve(
+                check.not_none(context.repository_def).asset_graph
+            )
+            if unexpected_asset_keys:
+                raise DagsterInvalidSubsetError(
+                    "RunRequest includes asset keys that are not part of sensor's asset_selection:"
+                    f" {unexpected_asset_keys}"
+                )
+
         resolved_run_requests = [
             run_request.with_replaced_attrs(
                 tags=merge_dicts(run_request.tags, DagsterRun.tags_for_sensor(self)),
             )
             for run_request in self.resolve_run_requests(
-                run_requests, context, self._asset_selection, dynamic_partitions_requests
+                run_requests_for_single_runs,
+                context,
+                self._asset_selection,
+                dynamic_partitions_requests,
             )
         ]
 
         return SensorExecutionData(
-            resolved_run_requests,
+            resolved_run_requests + run_requests_for_backfill_daemon,
             skip_message,
             updated_cursor,
             dagster_run_reactions,
