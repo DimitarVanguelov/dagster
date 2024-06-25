@@ -668,7 +668,7 @@ def _evaluate_sensor(
 
         yield
     else:
-        run_request_for_backfill_daemon, run_requests_for_single_runs = split_run_requests(
+        run_requests_for_backfill_daemon, run_requests_for_single_runs = split_run_requests(
             sensor_runtime_data.run_requests
         )
 
@@ -683,9 +683,9 @@ def _evaluate_sensor(
                 submit_threadpool_executor=submit_threadpool_executor,
                 sensor_debug_crash_flags=sensor_debug_crash_flags,
             )
-        if run_request_for_backfill_daemon:
+        if run_requests_for_backfill_daemon:
             _handle_backfill_requests(
-                run_request=run_request_for_backfill_daemon, instance=instance, context=context
+                run_requests=run_requests_for_backfill_daemon, instance=instance, context=context
             )
             context.update_state(TickStatus.SUCCESS, cursor=sensor_runtime_data.cursor)
 
@@ -891,24 +891,26 @@ def _handle_run_requests(
 
 
 def _handle_backfill_requests(
-    run_request: RunRequest,
+    run_requests: Sequence[RunRequest],
     instance: DagsterInstance,
     context: SensorLaunchContext,
 ) -> None:
-    backfill_id = make_new_backfill_id()
-    instance.add_backfill(
-        PartitionBackfill.from_asset_graph_subset(
-            backfill_id=backfill_id,
-            dynamic_partitions_store=instance,
-            backfill_timestamp=pendulum.now("UTC").timestamp(),
-            asset_graph_subset=run_request.asset_graph_subset,
-            tags=run_request.tags or {},
-            # would need to add these as params to RunRequest
-            title=None,
-            description=None,
+    for run_request in run_requests:
+        # TODO handling of duplicate run_keys so the same backfill isn't submitted twice
+        backfill_id = make_new_backfill_id()
+        instance.add_backfill(
+            PartitionBackfill.from_asset_graph_subset(
+                backfill_id=backfill_id,
+                dynamic_partitions_store=instance,
+                backfill_timestamp=pendulum.now("UTC").timestamp(),
+                asset_graph_subset=run_request.asset_graph_subset,
+                tags=run_request.tags or {},
+                # would need to add these as params to RunRequest
+                title=None,
+                description=None,
+            )
         )
-    )
-    context.add_run_group_info(run_group_id=backfill_id)
+        context.add_run_info(run_id=backfill_id, run_key=run_request.run_key)
 
 
 def is_under_min_interval(state: InstigatorState, external_sensor: ExternalSensor) -> bool:
