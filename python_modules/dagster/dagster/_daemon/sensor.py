@@ -31,7 +31,7 @@ from dagster._core.definitions.run_request import (
     RunRequest,
 )
 from dagster._core.definitions.selector import JobSubsetSelector
-from dagster._core.definitions.sensor_definition import DefaultSensorStatus
+from dagster._core.definitions.sensor_definition import DefaultSensorStatus, split_run_requests
 from dagster._core.definitions.utils import normalize_tags
 from dagster._core.errors import DagsterError
 from dagster._core.execution.backfill import PartitionBackfill
@@ -668,21 +668,9 @@ def _evaluate_sensor(
 
         yield
     else:
-        run_requests_for_backfill_daemon = []
-        run_requests_for_single_runs = []
-        for run_request in sensor_runtime_data.run_requests:
-            if run_request.asset_graph_subset is not None:
-                run_requests_for_backfill_daemon.append(run_request)
-            else:
-                run_requests_for_single_runs.append(run_request)
-        if len(run_requests_for_backfill_daemon) > 1:
-            raise DagsterError(
-                "Cannot yield multiple RunRequests with asset_graph_subset for a single sensor tick"
-            )
-        if run_requests_for_single_runs and run_requests_for_backfill_daemon:
-            raise DagsterError(
-                "Cannot yield RunRequests with asset_graph_subset and RunRequests with asset_selection for a single sensor tick"
-            )
+        run_request_for_backfill_daemon, run_requests_for_single_runs = split_run_requests(
+            sensor_runtime_data.run_requests
+        )
 
         if run_requests_for_single_runs:
             yield from _handle_run_requests(
@@ -695,9 +683,9 @@ def _evaluate_sensor(
                 submit_threadpool_executor=submit_threadpool_executor,
                 sensor_debug_crash_flags=sensor_debug_crash_flags,
             )
-        if run_requests_for_backfill_daemon:
+        if run_request_for_backfill_daemon:
             _handle_backfill_requests(
-                run_request=run_requests_for_backfill_daemon[0], instance=instance, context=context
+                run_request=run_request_for_backfill_daemon, instance=instance, context=context
             )
             context.update_state(TickStatus.SUCCESS, cursor=sensor_runtime_data.cursor)
 

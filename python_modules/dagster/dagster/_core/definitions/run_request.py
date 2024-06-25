@@ -125,10 +125,7 @@ class RunRequest(
             ("stale_assets_only", PublicAttr[bool]),
             ("partition_key", PublicAttr[Optional[str]]),
             ("asset_check_keys", PublicAttr[Optional[Sequence[AssetCheckKey]]]),
-            (
-                "asset_graph_subset",
-                PublicAttr[Optional[Any]],
-            ),  # AssetGraphSubset - got issues the "" type hint
+            ("asset_graph_subset", PublicAttr[Optional["AssetGraphSubset"]]),
         ],
     )
 ):
@@ -291,6 +288,11 @@ class RunRequest(
             )
         else:
             return None
+
+    def requires_backfill_daemon(self):
+        # TODO - can probably have a more intelligent way of determining if a run request should go to the backfill daemon
+        # maybe if there are multiple partitions keys in the asset graph subset?
+        return self.asset_graph_subset is not None
 
 
 def _check_valid_partition_key_after_dynamic_partitions_requests(
