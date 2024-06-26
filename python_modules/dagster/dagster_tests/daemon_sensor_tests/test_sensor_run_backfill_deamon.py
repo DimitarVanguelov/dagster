@@ -31,7 +31,7 @@ def asset1() -> None: ...
 def unpartitioned_child(): ...
 
 
-def make_backfill_request(context) -> RunRequest:
+def make_run_request_uses_backfill_daemon(context) -> RunRequest:
     ags = AssetGraphSubset.from_asset_partition_set(
         asset_partitions_set={
             AssetKeyPartitionKey(asset1.key, "foo"),
@@ -50,20 +50,20 @@ def make_backfill_request(context) -> RunRequest:
 def sensor_result_backfill_request_sensor(context):
     return SensorResult(
         dynamic_partitions_requests=[dynamic_partitions_def.build_add_request(["foo", "bar"])],
-        run_requests=[make_backfill_request(context)],
+        run_requests=[make_run_request_uses_backfill_daemon(context)],
     )
 
 
 @sensor(asset_selection=[asset1, unpartitioned_child])
 def return_backfill_request_sensor(context):
     context.instance.add_dynamic_partitions(dynamic_partitions_def.name, ["foo", "bar"])
-    return make_backfill_request(context)
+    return make_run_request_uses_backfill_daemon(context)
 
 
 @sensor(asset_selection=[asset1, unpartitioned_child])
 def yield_backfill_request_sensor(context):
     context.instance.add_dynamic_partitions(dynamic_partitions_def.name, ["foo", "bar"])
-    yield make_backfill_request(context)
+    yield make_run_request_uses_backfill_daemon(context)
 
 
 @asset(partitions_def=StaticPartitionsDefinition(["a", "b"]))

@@ -352,9 +352,6 @@ class InstigatorTick(NamedTuple("_InstigatorTick", [("tick_id", int), ("tick_dat
             )
         )
 
-    def with_run_group_info(self, run_group_id: str) -> "InstigatorTick":
-        return self._replace(tick_data=self.tick_data.with_run_group_info(run_group_id))
-
     @property
     def instigator_origin_id(self) -> str:
         return self.tick_data.instigator_origin_id
@@ -386,10 +383,6 @@ class InstigatorTick(NamedTuple("_InstigatorTick", [("tick_id", int), ("tick_dat
     @property
     def run_ids(self) -> Sequence[str]:
         return self.tick_data.run_ids
-
-    @property
-    def run_group_id(self) -> str:
-        return self.tick_data.run_group_id
 
     @property
     def run_keys(self) -> Sequence[str]:
@@ -514,7 +507,6 @@ class TickData(
             ("run_requests", Optional[Sequence[RunRequest]]),  # run requests created by the tick
             ("auto_materialize_evaluation_id", Optional[int]),
             ("reserved_run_ids", Optional[Sequence[str]]),
-            ("run_group_id", Optional[str]),
         ],
     )
 ):
@@ -548,7 +540,6 @@ class TickData(
         reserved_run_ids (Optional[Sequence[str]]): A list of run IDs to use for each of the
             run_requests. Used to ensure that if the tick fails partway through, we don't create
             any duplicate runs for the tick. Currently only used by AUTO_MATERIALIZE ticks.
-        run_group_id (Optional[str]): The run group ID for the runs created by this tick.
     """
 
     def __new__(
@@ -574,7 +565,6 @@ class TickData(
         run_requests: Optional[Sequence[RunRequest]] = None,
         auto_materialize_evaluation_id: Optional[int] = None,
         reserved_run_ids: Optional[Sequence[str]] = None,
-        run_group_id: Optional[str] = None,
     ):
         _validate_tick_args(instigator_type, status, run_ids, error, skip_reason)
         check.opt_list_param(log_key, "log_key", of_type=str)
@@ -603,7 +593,6 @@ class TickData(
             run_requests=check.opt_sequence_param(run_requests, "run_requests"),
             auto_materialize_evaluation_id=auto_materialize_evaluation_id,
             reserved_run_ids=check.opt_sequence_param(reserved_run_ids, "reserved_run_ids"),
-            run_group_id=check.opt_str_param(run_group_id, "run_group_id"),
         )
 
     def with_status(
@@ -643,9 +632,6 @@ class TickData(
                 },
             )
         )
-
-    def with_run_group_info(self, run_group_id: str) -> "TickData":
-        return self._replace(run_group_id=run_group_id)
 
     def with_run_requests(
         self,

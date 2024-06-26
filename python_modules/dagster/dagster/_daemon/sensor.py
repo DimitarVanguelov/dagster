@@ -153,9 +153,6 @@ class SensorLaunchContext(AbstractContextManager):
     def add_run_info(self, run_id: Optional[str] = None, run_key: Optional[str] = None) -> None:
         self._tick = self._tick.with_run_info(run_id, run_key)
 
-    def add_run_group_info(self, run_group_id: str) -> None:
-        self._tick = self._tick.with_run_group_info(run_group_id)
-
     def add_log_key(self, log_key: Sequence[str]) -> None:
         self._tick = self._tick.with_log_key(log_key)
 

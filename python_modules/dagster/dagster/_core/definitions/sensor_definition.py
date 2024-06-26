@@ -532,6 +532,9 @@ def _check_dynamic_partitions_requests(
 def split_run_requests(
     run_requests: Sequence[RunRequest],
 ) -> Tuple[Sequence[RunRequest], Sequence[RunRequest]]:
+    """Splits RunRequests into those that must be handled by the backfill daemon and those
+    that can be handled by launching a single run.
+    """
     run_requests_for_backfill_daemon = []
     run_requests_for_single_runs = []
     for run_request in run_requests:
@@ -539,16 +542,6 @@ def split_run_requests(
             run_requests_for_backfill_daemon.append(run_request)
         else:
             run_requests_for_single_runs.append(run_request)
-    # TODO fix this checking. Determine if we want to only allow one backfill or if we can do mulitple backfills or backfills and single
-    # runs together. This will depend on run grouping stuff
-    # if len(run_requests_for_backfill_daemon) > 1:
-    #     raise DagsterInvalidDefinitionError(
-    #         "Cannot yield multiple RunRequests with asset_graph_subset for a single sensor tick"
-    #     )
-    # if run_requests_for_single_runs and run_requests_for_backfill_daemon:
-    #     raise DagsterInvalidDefinitionError(
-    #         "Cannot yield RunRequests with asset_graph_subset and RunRequests with asset_selection for a single sensor tick"
-    #     )
 
     return run_requests_for_backfill_daemon, run_requests_for_single_runs
 
@@ -901,7 +894,6 @@ class SensorDefinition(IHasInternalInit):
 
         if run_requests_for_backfill_daemon:
             for run_request in run_requests_for_backfill_daemon:
-                # run_request = run_requests_for_backfill_daemon[0]
                 asset_selection = check.not_none(
                     self._asset_selection,
                     "Can only yield RunRequests with asset_graph_subset for sensors with an asset_selection",
