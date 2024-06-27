@@ -290,9 +290,19 @@ class RunRequest(
             return None
 
     def requires_backfill_daemon(self):
-        # TODO - can probably have a more intelligent way of determining if a run request should go to the backfill daemon
-        # maybe if there are multiple partitions keys in the asset graph subset?
-        return self.asset_graph_subset is not None
+        # TODO - is this slow?
+        return (
+            self.asset_graph_subset is not None
+            and len(
+                set(
+                    [
+                        asset_partition.partition_key
+                        for asset_partition in self.asset_graph_subset.iterate_asset_partitions()
+                    ]
+                )
+            )
+            > 1
+        )
 
 
 def _check_valid_partition_key_after_dynamic_partitions_requests(
