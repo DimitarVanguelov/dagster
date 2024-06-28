@@ -181,6 +181,16 @@ class RunRequest(
         from dagster._core.definitions.asset_graph_subset import AssetGraphSubset
         from dagster._core.definitions.run_config import convert_config_input
 
+        if asset_check_keys and asset_graph_subset:
+            check.failed(
+                "Cannot specify both asset_check_keys and asset_graph_subset in RunRequest. Must use asset_selection in order to use asset_check_keys."
+            )
+
+        if stale_assets_only and asset_graph_subset:
+            check.failed(
+                "Cannot specify both stale_assets_only and asset_graph_subset in RunRequest. Must use asset_selection in order to use stale_assets_only."
+            )
+
         if asset_selection and asset_graph_subset:
             check.failed("Cannot specify both asset_selection and asset_graph_subset in RunRequest")
 
