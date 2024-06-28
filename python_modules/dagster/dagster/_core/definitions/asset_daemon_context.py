@@ -89,7 +89,7 @@ class AssetDaemonContext:
         respect_materialization_data_versions: bool,
         logger: logging.Logger,
         evaluation_time: Optional[datetime.datetime] = None,
-        launch_backfills: bool = False,
+        request_backfills: bool = False,
     ):
         from dagster._utils.caching_instance_queryer import CachingInstanceQueryer
 
@@ -117,7 +117,7 @@ class AssetDaemonContext:
         self._auto_observe_asset_keys = auto_observe_asset_keys or set()
         self._respect_materialization_data_versions = respect_materialization_data_versions
         self._logger = logger
-        self._launch_backfills = launch_backfills
+        self._request_backfills = request_backfills
 
     @property
     def logger(self) -> logging.Logger:
@@ -196,7 +196,7 @@ class AssetDaemonContext:
 
         results, to_request = self.get_asset_condition_evaluations()
 
-        if self._launch_backfills:
+        if self._request_backfills:
             run_requests = (
                 [
                     RunRequest(

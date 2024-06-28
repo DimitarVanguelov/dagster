@@ -3233,4 +3233,4 @@ class DagsterInstance(DynamicPartitionsStore):
         return False
 
     def da_emit_backfills(self) -> bool:
-        return True  # TODO: make False before merge
+        return False  # TODO - determine how we will have users turn this feature on
