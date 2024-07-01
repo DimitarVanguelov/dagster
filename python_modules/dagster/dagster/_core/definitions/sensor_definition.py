@@ -1309,8 +1309,20 @@ def _run_requests_with_base_asset_jobs(
     asset_graph = context.repository_def.asset_graph  # type: ignore  # (possible none)
     result = []
     for run_request in run_requests:
-        if run_request.asset_selection:
-            asset_keys = run_request.asset_selection
+        if run_request.asset_selection or run_request.asset_graph_subset:
+            if run_request.asset_selection:
+                asset_keys = run_request.asset_selection
+                partition_key = run_request.partition_key
+            else:
+                asset_keys = run_request.asset_graph_subset.asset_keys
+                # assumes the partition key checking was correct. Maybe we should check again here
+                partition_key = next(
+                    iter(
+                        run_request.asset_graph_subset.get_partitions_subset(
+                            next(iter(asset_keys))
+                        ).get_partition_keys()
+                    )
+                )
 
             unexpected_asset_keys = (
                 KeysAssetSelection(selected_keys=asset_keys) - outer_asset_selection
@@ -1328,6 +1340,8 @@ def _run_requests_with_base_asset_jobs(
             run_request.with_replaced_attrs(
                 job_name=base_job.name,  # type: ignore  # (possible none)
                 asset_selection=list(asset_keys),
+                asset_graph_subset=None,
+                partition_key=partition_key,
             )
         )
 

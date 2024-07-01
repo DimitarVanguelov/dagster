@@ -88,7 +88,22 @@ def asset_outside_of_selection_backfill_request_sensor(context):
 @sensor(asset_selection=[static_partitioned_asset])
 def invalid_partition_backfill_request_sensor(context):
     ags = AssetGraphSubset.from_asset_partition_set(
-        asset_partitions_set={AssetKeyPartitionKey(static_partitioned_asset.key, "c")},
+        asset_partitions_set={
+            AssetKeyPartitionKey(static_partitioned_asset.key, "b"),
+            AssetKeyPartitionKey(static_partitioned_asset.key, "c"),
+        },
+        asset_graph=context.repository_def.asset_graph,
+    )
+    return RunRequest(
+        asset_graph_subset=ags,
+        tags={"tagkey": "tagvalue"},
+    )
+
+
+@sensor(asset_selection=[static_partitioned_asset])
+def single_partition_run_request_sensor(context):
+    ags = AssetGraphSubset.from_asset_partition_set(
+        asset_partitions_set={AssetKeyPartitionKey(static_partitioned_asset.key, "b")},
         asset_graph=context.repository_def.asset_graph,
     )
     return RunRequest(
@@ -105,6 +120,7 @@ defs = Definitions(
         yield_backfill_request_sensor,
         asset_outside_of_selection_backfill_request_sensor,
         invalid_partition_backfill_request_sensor,
+        single_partition_run_request_sensor,
     ],
 )
 
@@ -223,3 +239,35 @@ def test_invalid_partition(instance, executor):
         # allow creating a backfill with an invalid partition. it will get caught in the daemon
         # and show up as an error there.
         validate_tick(ticks[0], external_sensor, None, TickStatus.SUCCESS)
+
+
+def test_single_partition(instance, executor):
+    """Tests requesting a single partition using asset_graph_subset, which in turn we be run as a single run,
+    not a backfill.
+    """
+    with create_test_daemon_workspace_context(
+        workspace_load_target=module_target, instance=instance
+    ) as workspace_context:
+        external_repo = load_external_repo(workspace_context, "__repository__")
+        external_sensor = external_repo.get_external_sensor(
+            single_partition_run_request_sensor.name
+        )
+
+        instance.add_instigator_state(
+            InstigatorState(
+                external_sensor.get_external_origin(),
+                InstigatorType.SENSOR,
+                InstigatorStatus.RUNNING,
+            )
+        )
+        evaluate_sensors(workspace_context, executor)
+        ticks = instance.get_ticks(
+            external_sensor.get_external_origin_id(), external_sensor.selector_id
+        )
+
+        assert instance.get_runs_count() == 1
+        run = instance.get_runs()[0]
+
+        validate_tick(
+            ticks[0], external_sensor, None, TickStatus.SUCCESS, expected_run_ids=[run.run_id]
+        )
