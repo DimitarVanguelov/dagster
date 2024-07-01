@@ -272,15 +272,9 @@ class AssetGraph(BaseAssetGraph[AssetNode]):
 
         if isinstance(asset_or_check_key, AssetKey):
             assets_def = self.get(asset_or_check_key).assets_def
-            return (
-                assets_def.unique_id
-                if (
-                    not assets_def.can_subset
-                    and (len(assets_def.keys) > 1 or assets_def.check_keys)
-                )
-                else None
-            )
-
+            if not assets_def.computation:
+                return None
+            return assets_def.computation.get_execution_set_identifier(asset_or_check_key)
         else:  # AssetCheckKey
             assets_def = self._assets_defs_by_check_key[asset_or_check_key]
             # Executing individual checks isn't supported in graph assets
