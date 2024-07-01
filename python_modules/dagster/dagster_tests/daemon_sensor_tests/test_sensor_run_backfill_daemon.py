@@ -109,7 +109,7 @@ defs = Definitions(
 )
 
 module_target = ModuleTarget(
-    module_name="dagster_tests.daemon_sensor_tests.test_sensor_run_backfill_request",
+    module_name="dagster_tests.daemon_sensor_tests.test_sensor_run_backfill_daemon",
     attribute=None,
     working_directory=os.path.dirname(__file__),
     location_name="test_location",

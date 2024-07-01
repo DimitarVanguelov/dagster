@@ -533,11 +533,11 @@ def create_test_daemon_workspace_context(
 def load_external_repo(
     workspace_context: WorkspaceProcessContext, repo_name: str
 ) -> ExternalRepository:
-    code_location = next(
+    code_location_entry = next(
         iter(workspace_context.create_request_context().get_workspace_snapshot().values())
-    ).code_location
-    assert code_location
-    return code_location.get_repository(repo_name)
+    )
+    assert code_location_entry.code_location, code_location_entry.load_error
+    return code_location_entry.code_location.get_repository(repo_name)
 
 
 def remove_none_recursively(obj: T) -> T:
