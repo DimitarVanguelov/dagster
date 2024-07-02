@@ -2,7 +2,8 @@ from pathlib import Path
 
 from dagster import Definitions, asset
 from dagster._core.definitions.metadata import (
-    link_to_source_control,
+    AnchorBasedFilePathMapping,
+    link_to_git,
     with_source_code_references,
 )
 
@@ -16,10 +17,12 @@ def another_asset(): ...
 
 
 defs = Definitions(
-    assets=link_to_source_control(
+    assets=link_to_git(
         assets_defs=with_source_code_references([my_asset, another_asset]),
-        source_control_url="https://github.com/dagster-io/dagster",
-        source_control_branch="main",
-        repository_root_absolute_path=Path(__file__).parent,
+        git_url="https://github.com/dagster-io/dagster",
+        git_branch="main",
+        file_path_mapping=AnchorBasedFilePathMapping(
+            local_file_anchor=Path(__file__).parent, file_anchor_path_in_repository="/"
+        ),
     )
 )

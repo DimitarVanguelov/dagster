@@ -154,34 +154,10 @@ defs = Definitions(
 
 ### In any Dagster environment
 
-The <PyObject module="dagster" object="dagster._core.definitions.metadata.link_to_source_control"/> utility allows you to convert local file code references to source control links. You'll need to provide the base URL of your git repository, the branch or commit hash, and a path to the repository root locally.
+The <PyObject module="dagster" object="dagster._core.definitions.metadata.link_to_git"/> utility allows you to convert local file code references to source control links. You'll need to provide the base URL of your git repository, the branch or commit hash, and a path to the repository root locally.
 
-```python file=/guides/dagster/code_references/link_to_source_control.py
-from pathlib import Path
-
-from dagster import Definitions, asset
-from dagster._core.definitions.metadata import (
-    link_to_source_control,
-    with_source_code_references,
-)
-
-
-@asset
-def my_asset(): ...
-
-
-@asset
-def another_asset(): ...
-
-
-defs = Definitions(
-    assets=link_to_source_control(
-        assets_defs=with_source_code_references([my_asset, another_asset]),
-        source_control_url="https://github.com/dagster-io/dagster",
-        source_control_branch="main",
-        repository_root_absolute_path=Path(__file__).parent,
-    )
-)
+```python file=/guides/dagster/code_references/link_to_git.py
+ENOENT: no such file or directory, open '/Users/ben/repos/dagster/examples/docs_snippets/docs_snippets/guides/dagster/code_references/link_to_git.py'
 ```
 
 You may choose to conditionally apply this transformation based on the environment in which your Dagster code is running. For example, you could use an environment variable to determine whether to link to local files or to a source control repository:
@@ -192,7 +168,8 @@ from pathlib import Path
 
 from dagster import Definitions, asset
 from dagster._core.definitions.metadata import (
-    link_to_source_control,
+    AnchorBasedFilePathMapping,
+    link_to_git,
     with_source_code_references,
 )
 
@@ -208,11 +185,13 @@ def another_asset(): ...
 assets = with_source_code_references([my_asset, another_asset])
 
 defs = Definitions(
-    assets=link_to_source_control(
+    assets=link_to_git(
         assets_defs=assets,
-        source_control_url="https://github.com/dagster-io/dagster",
-        source_control_branch="main",
-        repository_root_absolute_path=Path(__file__).parent,
+        git_url="https://github.com/dagster-io/dagster",
+        git_branch="main",
+        file_path_mapping=AnchorBasedFilePathMapping(
+            local_file_anchor=Path(__file__).parent, file_anchor_path_in_repository="/"
+        ),
     )
     if bool(os.getenv("IS_PRODUCTION"))
     else assets
