@@ -202,88 +202,113 @@ class MultiprocessExecutor(Executor):
             term_events: Dict[str, Any] = {}
             stopping: bool = False
 
-            while (not stopping and not active_execution.is_complete) or active_iters:
-                if active_execution.check_for_interrupts():
+            try:
+                while (not stopping and not active_execution.is_complete) or active_iters:
+                    if active_execution.check_for_interrupts():
+                        yield DagsterEvent.engine_event(
+                            plan_context,
+                            "Multiprocess executor: received termination signal - "
+                            "forwarding to active child processes",
+                            EngineEventData.interrupted(list(term_events.keys())),
+                        )
+                        stopping = True
+                        active_execution.mark_interrupted()
+                        for key, event in term_events.items():
+                            event.set()
+
+                    while not stopping:
+                        steps = active_execution.get_steps_to_execute(
+                            limit=(limit - len(active_iters)),
+                        )
+
+                        yield from active_execution.concurrency_event_iterator(plan_context)
+
+                        if not steps:
+                            break
+
+                        for step in steps:
+                            step_context = plan_context.for_step(step)
+                            term_events[step.key] = multiproc_ctx.Event()
+                            active_iters[step.key] = execute_step_out_of_process(
+                                multiproc_ctx,
+                                job,
+                                step_context,
+                                step,
+                                errors,
+                                term_events,
+                                self.retries,
+                                active_execution.get_known_state(),
+                                execution_plan.repository_load_data,
+                            )
+
+                    # process active iterators
+                    empty_iters = []
+                    for key, step_iter in active_iters.items():
+                        try:
+                            event_or_none = next(step_iter)
+                            if event_or_none is None:
+                                continue
+                            else:
+                                yield event_or_none
+                                active_execution.handle_event(event_or_none)
+
+                        except ChildProcessCrashException as crash:
+                            serializable_error = serializable_error_info_from_exc_info(
+                                sys.exc_info()
+                            )
+                            step_context = plan_context.for_step(
+                                active_execution.get_step_by_key(key)
+                            )
+                            yield DagsterEvent.engine_event(
+                                step_context,
+                                get_run_crash_explanation(
+                                    prefix=f"Multiprocess executor: child process for step {key}",
+                                    exit_code=crash.exit_code,
+                                ),
+                                EngineEventData.engine_error(serializable_error),
+                            )
+                            step_failure_event = DagsterEvent.step_failure_event(
+                                step_context=plan_context.for_step(
+                                    active_execution.get_step_by_key(key)
+                                ),
+                                step_failure_data=StepFailureData(
+                                    error=serializable_error, user_failure_data=None
+                                ),
+                            )
+                            active_execution.handle_event(step_failure_event)
+                            yield step_failure_event
+                            empty_iters.append(key)
+                        except StopIteration:
+                            empty_iters.append(key)
+
+                    # clear and mark complete finished iterators
+                    for key in empty_iters:
+                        del active_iters[key]
+                        del term_events[key]
+                        active_execution.verify_complete(plan_context, key)
+
+                    # process skipped and abandoned steps
+                    yield from active_execution.plan_events_iterator(plan_context)
+
+            except Exception:
+                if not stopping and term_events:
+                    serializable_error = serializable_error_info_from_exc_info(sys.exc_info())
                     yield DagsterEvent.engine_event(
                         plan_context,
-                        "Multiprocess executor: received termination signal - "
-                        "forwarding to active child processes",
-                        EngineEventData.interrupted(list(term_events.keys())),
+                        "Unexpected exception while steps were still in-progress - terminating running steps:",
+                        event_specific_data=EngineEventData(
+                            metadata={
+                                "steps_interrupted": MetadataValue.text(
+                                    str(list(term_events.keys()))
+                                )
+                            },
+                            error=serializable_error,
+                        ),
                     )
-                    stopping = True
-                    active_execution.mark_interrupted()
                     for key, event in term_events.items():
                         event.set()
 
-                while not stopping:
-                    steps = active_execution.get_steps_to_execute(
-                        limit=(limit - len(active_iters)),
-                    )
-
-                    yield from active_execution.concurrency_event_iterator(plan_context)
-
-                    if not steps:
-                        break
-
-                    for step in steps:
-                        step_context = plan_context.for_step(step)
-                        term_events[step.key] = multiproc_ctx.Event()
-                        active_iters[step.key] = execute_step_out_of_process(
-                            multiproc_ctx,
-                            job,
-                            step_context,
-                            step,
-                            errors,
-                            term_events,
-                            self.retries,
-                            active_execution.get_known_state(),
-                            execution_plan.repository_load_data,
-                        )
-
-                # process active iterators
-                empty_iters = []
-                for key, step_iter in active_iters.items():
-                    try:
-                        event_or_none = next(step_iter)
-                        if event_or_none is None:
-                            continue
-                        else:
-                            yield event_or_none
-                            active_execution.handle_event(event_or_none)
-
-                    except ChildProcessCrashException as crash:
-                        serializable_error = serializable_error_info_from_exc_info(sys.exc_info())
-                        step_context = plan_context.for_step(active_execution.get_step_by_key(key))
-                        yield DagsterEvent.engine_event(
-                            step_context,
-                            get_run_crash_explanation(
-                                prefix=f"Multiprocess executor: child process for step {key}",
-                                exit_code=crash.exit_code,
-                            ),
-                            EngineEventData.engine_error(serializable_error),
-                        )
-                        step_failure_event = DagsterEvent.step_failure_event(
-                            step_context=plan_context.for_step(
-                                active_execution.get_step_by_key(key)
-                            ),
-                            step_failure_data=StepFailureData(
-                                error=serializable_error, user_failure_data=None
-                            ),
-                        )
-                        active_execution.handle_event(step_failure_event)
-                        yield step_failure_event
-                        empty_iters.append(key)
-                    except StopIteration:
-                        empty_iters.append(key)
-
-                # clear and mark complete finished iterators
-                for key in empty_iters:
-                    del active_iters[key]
-                    del term_events[key]
-                    active_execution.verify_complete(plan_context, key)
-
-                # process skipped and abandoned steps
-                yield from active_execution.plan_events_iterator(plan_context)
+                raise
 
             errs = {pid: err for pid, err in errors.items() if err}
 
